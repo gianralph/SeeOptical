@@ -83,6 +83,13 @@
                 >
                     <v-list-item-title>Dashboard</v-list-item-title>
                 </v-list-item>
+                                    <v-list-item prepend-icon="mdi-calendar-check" class="drawer-link" @click="$inertia.visit('/visits')">
+                        <v-list-item-title>Visits</v-list-item-title>
+                    </v-list-item>
+                                                        <v-list-item prepend-icon="mdi-account-group" class="drawer-link" @click="$inertia.visit('/patients')">
+                        <v-list-item-title>Patients</v-list-item-title>
+                    </v-list-item>
+
 
                 <!-- Admin Libraries -->
                 <v-list-group
@@ -97,32 +104,8 @@
                         </v-list-item>
                     </template>
 
-                    <v-list-item prepend-icon="mdi-cash-multiple" class="drawer-link" @click="$inertia.visit('/fundclusters')">
-                        <v-list-item-title>Fund Clusters</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-file-tree" class="drawer-link" @click="$inertia.visit('/paps')">
-                        <v-list-item-title>PAPS</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-format-list-bulleted" class="drawer-link" @click="$inertia.visit('/expensetypes')">
-                        <v-list-item-title>Expense Types</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-cash" class="drawer-link" @click="$inertia.visit('/expenselineitems')">
-                        <v-list-item-title>Line Budget Items</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-office-building" class="drawer-link" @click="$inertia.visit('/divisions')">
-                        <v-list-item-title>Divisions</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-account-box" class="drawer-link" @click="$inertia.visit('/employees')">
-                        <v-list-item-title>Employees</v-list-item-title>
-                    </v-list-item>
-
-                    <v-list-item prepend-icon="mdi-home-account" class="drawer-link" @click="$inertia.visit('/sections')">
-                        <v-list-item-title>Sections</v-list-item-title>
+                    <v-list-item prepend-icon="mdi-cash-multiple" class="drawer-link" @click="$inertia.visit('/visits')">
+                        <v-list-item-title>Visits</v-list-item-title>
                     </v-list-item>
                 </v-list-group>
 

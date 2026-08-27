@@ -8,6 +8,8 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\VisitController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\GlassesOrderController;
+
 
 
 // use App\Http\Controllers\ChartController;
@@ -51,7 +53,6 @@ Route::get('/patients/{id}', [PatientController::class, 'show'])
     ->name('patients.show');
 
 
-    
  
    
 
@@ -61,6 +62,27 @@ Route::get(
 )->name('visits.patient.latest');
 
 
+
+Route::get('/glasses-orders', [
+    GlassesOrderController::class,
+    'index'
+])->name('glasses-orders.index');
+
+Route::get('/glasses-orders/{id}/tracking', [
+    GlassesOrderController::class,
+    'tracking'
+])->name('glasses-orders.tracking');
+
+Route::post('/glasses-orders/{id}/status', [
+    GlassesOrderController::class,
+    'updateStatus'
+])->name('glasses-orders.status');
+Route::post(
+    '/glasses-orders/{id}/return',
+    [GlassesOrderController::class, 'returnOrder']
+);
+
+Route::resource('glasses-orders', GlassesOrderController::class);
     Route::resource('employees', EmployeeController::class);
     Route::resource('visits', VisitController::class);
     // Route::resource('clients', ClientController::class);

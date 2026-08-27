@@ -11,158 +11,198 @@ use Inertia\Inertia;
 
 class VisitController extends Controller
 {
-   public function index(Request $request)
-    {
-        $search = $request->input('search');
+public function index(Request $request)
+{
+    $search = $request->input('search');
 
-        $visits = DB::table('visits')
-            ->leftJoin('patients', 'patients.id', '=', 'visits.patient_id')
-            ->leftJoin('doctors', 'doctors.id', '=', 'visits.doctor_id')
-            ->leftJoin('employees', 'employees.id', '=', 'doctors.user_id')
-            ->select(
-                'visits.*',
+    $visits = DB::table('visits as v')
+        ->leftJoin('patients as p', 'p.id', '=', 'v.patient_id')
+        ->leftJoin('doctors as d', 'd.id', '=', 'v.doctor_id')
+        ->leftJoin('employees as e', 'e.id', '=', 'd.user_id')
+        ->leftJoin(
+            'chief_complaints as cc',
+            'cc.id',
+            '=',
+            'v.chief_complaint_id'
+        )
+        ->leftJoin(
+            'glasses_orders as go',
+            'go.visit_id',
+            '=',
+            'v.id'
+        )
+        ->leftJoin(
+            'glasses_inventory as gi',
+            'gi.id',
+            '=',
+            'go.frame_id'
+        )
+        ->select(
+            'v.*',
 
-                DB::raw("
-                    TRIM(CONCAT(
-                        COALESCE(patients.first_name, ''),
-                        ' ',
-                        COALESCE(patients.middle_name, ''),
-                        ' ',
-                        COALESCE(patients.last_name, ''),
-                        CASE
-                            WHEN patients.suffix IS NOT NULL
-                                 AND patients.suffix != ''
-                            THEN CONCAT(' ', patients.suffix)
-                            ELSE ''
-                        END
-                    )) AS patient_name
-                "),
+            DB::raw("
+                CONCAT(
+                    p.last_name,
+                    ', ',
+                    p.first_name
+                ) as patient_name
+            "),
 
-                DB::raw("
-                    TRIM(CONCAT(
-                        COALESCE(employees.firstname, ''),
-                        ' ',
-                        COALESCE(employees.middlename, ''),
-                        ' ',
-                        COALESCE(employees.lastname, ''),
-                        CASE
-                            WHEN employees.suffix IS NOT NULL
-                                 AND employees.suffix != ''
-                            THEN CONCAT(' ', employees.suffix)
-                            ELSE ''
-                        END
-                    )) AS doctor_name
-                "),
+            DB::raw("
+                CONCAT(
+                    e.firstname,
+                    ' ',
+                    e.lastname
+                ) as doctor_name
+            "),
 
-                'doctors.license_no',
-                'doctors.specialization'
-            )
-            ->when($search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('visits.visit_type', 'like', "%{$search}%")
-                        ->orWhere('visits.diagnosis', 'like', "%{$search}%")
-                        ->orWhere('patients.first_name', 'like', "%{$search}%")
-                        ->orWhere('patients.last_name', 'like', "%{$search}%")
-                        ->orWhere('employees.firstname', 'like', "%{$search}%")
-                        ->orWhere('employees.lastname', 'like', "%{$search}%");
-                });
-            })
-            ->orderByDesc('visits.visit_date')
-            ->orderByDesc('visits.visit_time')
-            ->get();
+            'cc.name as chief_complaint',
 
-        /*
-        |--------------------------------------------------------------------------
-        | Patients
-        |--------------------------------------------------------------------------
-        */
+            // Glasses order
+            'go.id as glasses_order_id',
+            'go.frame_id as glasses_frame_id',
+            'go.serial_no as glasses_serial',
+            'go.additional_features as glasses_features',
+            'go.unit_price as glasses_price',
+            'go.status as glasses_status',
 
-        $patients = DB::table('patients')
-            ->where('is_active', 1)
-            ->select(
-                'id',
-                DB::raw("
-                    TRIM(CONCAT(
-                        COALESCE(last_name, ''),
-                        ', ',
-                        COALESCE(first_name, ''),
-                        CASE
-                            WHEN middle_name IS NOT NULL
-                                 AND middle_name != ''
-                            THEN CONCAT(' ', LEFT(middle_name, 1), '.')
-                            ELSE ''
-                        END,
-                        CASE
-                            WHEN suffix IS NOT NULL
-                                 AND suffix != ''
-                            THEN CONCAT(' ', suffix)
-                            ELSE ''
-                        END
-                    )) AS description
-                ")
-            )
-            ->orderBy('last_name')
-            ->orderBy('first_name')
-            ->get();
+            // Inventory
+            'gi.code as glasses_code',
+            'gi.brand as glasses_brand',
+            'gi.model as glasses_model',
+            'gi.description as glasses_description',
+            'gi.color as glasses_color'
+        )
+        ->orderByDesc('v.visit_date')
+        ->orderByDesc('v.visit_time')
+        ->get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Doctors
-        |--------------------------------------------------------------------------
-        */
+    // Patients
+    $patients = DB::table('patients')
+        ->where('is_active', 1)
+        ->select(
+            'id',
+            DB::raw("
+                TRIM(CONCAT(
+                    COALESCE(last_name, ''),
+                    ', ',
+                    COALESCE(first_name, ''),
+                    CASE
+                        WHEN middle_name IS NOT NULL
+                             AND middle_name != ''
+                        THEN CONCAT(
+                            ' ',
+                            LEFT(middle_name, 1),
+                            '.'
+                        )
+                        ELSE ''
+                    END,
+                    CASE
+                        WHEN suffix IS NOT NULL
+                             AND suffix != ''
+                        THEN CONCAT(' ', suffix)
+                        ELSE ''
+                    END
+                )) AS description
+            ")
+        )
+        ->orderBy('last_name')
+        ->orderBy('first_name')
+        ->get();
 
-        $doctors = DB::table('doctors')
-            ->join(
-                'employees',
-                'employees.id',
-                '=',
-                'doctors.user_id'
-            )
-            ->where('doctors.is_active', 1)
-            ->where('employees.status', 'A')
-            ->select(
-                'doctors.id',
-                'doctors.license_no',
-                'doctors.specialization',
-                DB::raw("
-                    TRIM(CONCAT(
-                        COALESCE(employees.firstname, ''),
-                        ' ',
-                        COALESCE(employees.middlename, ''),
-                        ' ',
-                        COALESCE(employees.lastname, ''),
-                        CASE
-                            WHEN employees.suffix IS NOT NULL
-                                 AND employees.suffix != ''
-                            THEN CONCAT(' ', employees.suffix)
-                            ELSE ''
-                        END
-                    )) AS description
-                ")
-            )
-            ->orderBy('employees.lastname')
-            ->orderBy('employees.firstname')
-            ->get();
+    // Doctors
+    $doctors = DB::table('doctors')
+        ->join(
+            'employees',
+            'employees.id',
+            '=',
+            'doctors.user_id'
+        )
+        ->where('doctors.is_active', 1)
+        ->where('employees.status', 'A')
+        ->select(
+            'doctors.id',
+            'doctors.license_no',
+            'doctors.specialization',
+            DB::raw("
+                TRIM(CONCAT(
+                    COALESCE(employees.firstname, ''),
+                    ' ',
+                    COALESCE(employees.middlename, ''),
+                    ' ',
+                    COALESCE(employees.lastname, ''),
+                    CASE
+                        WHEN employees.suffix IS NOT NULL
+                             AND employees.suffix != ''
+                        THEN CONCAT(
+                            ' ',
+                            employees.suffix
+                        )
+                        ELSE ''
+                    END
+                )) AS description
+            ")
+        )
+        ->orderBy('employees.lastname')
+        ->orderBy('employees.firstname')
+        ->get();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Chief Complaints
-        |--------------------------------------------------------------------------
-        */
+    // Chief complaints
+    $chiefComplaints = DB::table('chief_complaints')
+        ->where('is_active', 1)
+        ->orderBy('name')
+        ->get();
 
-        $chiefComplaints = DB::table('chief_complaints')
-            ->where('is_active', 1)
-            ->orderBy('name')
-            ->get();
+    // Glasses inventory
+    $glassesInventory = DB::table('glasses_inventory')
+        ->where('is_active', 1)
+        ->where('available_quantity', '>', 0)
+        ->select(
+            'id',
+            'code',
+            'brand',
+            'model',
+            'description',
+            'color',
+            'quantity',
+            'available_quantity',
+            'cost_price',
+            'selling_price',
+            DB::raw("
+                CONCAT(
+                    code,
+                    ' - ',
+                    COALESCE(brand, ''),
+                    CASE
+                        WHEN model IS NOT NULL
+                             AND model != ''
+                        THEN CONCAT(' ', model)
+                        ELSE ''
+                    END,
+                    ' - ',
+                    description,
+                    CASE
+                        WHEN color IS NOT NULL
+                             AND color != ''
+                        THEN CONCAT(' (', color, ')')
+                        ELSE ''
+                    END
+                ) AS display_name
+            ")
+        )
+        ->orderBy('brand')
+        ->orderBy('model')
+        ->get();
 
-        return Inertia::render('Visits', [
-            'visits' => $visits,
-            'patients' => $patients,
-            'doctors' => $doctors,
-            'chiefComplaints' => $chiefComplaints,
-            'search' => $search,
-        ]);
-    }
+    return Inertia::render('Visits', [
+        'visits' => $visits,
+        'patients' => $patients,
+        'doctors' => $doctors,
+        'chiefComplaints' => $chiefComplaints,
+        'glassesInventory' => $glassesInventory,
+        'search' => $search,
+    ]);
+}
 
 public function store(Request $request)
 {
@@ -270,88 +310,270 @@ public function store(Request $request)
             'nullable',
             'date',
         ],
+        'ordered_glasses' => [
+    'nullable',
+    'boolean',
+],
+'ordered_glasses' => [
+    'nullable',
+    'boolean',
+],
+
+'frame_id' => [
+    'nullable',
+    'integer',
+    'exists:glasses_inventory,id',
+],
+
+'glasses_serial' => [
+    'nullable',
+    'string',
+    'max:100',
+],
+
+'glasses_features' => [
+    'nullable',
+    'string',
+],
+'unit_price' => [
+    'nullable',
+    'numeric',
+    'min:0',
+],
     ]);
+    
 
-    DB::transaction(function () use ($validated) {
+DB::transaction(function () use ($validated) {
 
-        $visitData = [
-            'patient_id' => $validated['patient_id'],
-            'doctor_id' => $validated['doctor_id'],
+    $visitData = [
+        'patient_id' => $validated['patient_id'],
+        'doctor_id' => $validated['doctor_id'],
+        'chief_complaint_id' => $validated['chief_complaint_id'] ?? null,
 
-            // CORRECT FIELD
-            'chief_complaint_id' =>
-                $validated['chief_complaint_id'] ?? null,
+        'visit_date' => $validated['visit_date'],
+        'visit_time' => $validated['visit_time'] ?? null,
+        'visit_type' => $validated['visit_type'],
 
-            'visit_date' => $validated['visit_date'],
-            'visit_time' => $validated['visit_time'] ?? null,
-            'visit_type' => $validated['visit_type'],
+        'visual_acuity_od' => $validated['visual_acuity_od'] ?? null,
+        'visual_acuity_os' => $validated['visual_acuity_os'] ?? null,
 
-            'visual_acuity_od' =>
-                $validated['visual_acuity_od'] ?? null,
+        'iop_od' => $validated['iop_od'] ?? null,
+        'iop_os' => $validated['iop_os'] ?? null,
 
-            'visual_acuity_os' =>
-                $validated['visual_acuity_os'] ?? null,
+        'external_exam' => $validated['external_exam'] ?? null,
+        'anterior_segment' => $validated['anterior_segment'] ?? null,
+        'fundus_exam' => $validated['fundus_exam'] ?? null,
+        'other_findings' => $validated['other_findings'] ?? null,
 
-            'iop_od' =>
-                $validated['iop_od'] ?? null,
+        'diagnosis' => $validated['diagnosis'] ?? null,
+        'treatment' => $validated['treatment'] ?? null,
+        'notes' => $validated['notes'] ?? null,
+        'follow_up_date' => $validated['follow_up_date'] ?? null,
 
-            'iop_os' =>
-                $validated['iop_os'] ?? null,
+        'updated_at' => now(),
+    ];
 
-            'external_exam' =>
-                $validated['external_exam'] ?? null,
+    if (!empty($validated['id'])) {
 
-            'anterior_segment' =>
-                $validated['anterior_segment'] ?? null,
+        DB::table('visits')
+            ->where('id', $validated['id'])
+            ->update($visitData);
 
-            'fundus_exam' =>
-                $validated['fundus_exam'] ?? null,
+        $visitId = $validated['id'];
 
-            'other_findings' =>
-                $validated['other_findings'] ?? null,
+    } else {
 
-            'diagnosis' =>
-                $validated['diagnosis'] ?? null,
+        $visitData['created_at'] = now();
 
-            'treatment' =>
-                $validated['treatment'] ?? null,
+        $visitId = DB::table('visits')
+            ->insertGetId($visitData);
+    }
 
-            'notes' =>
-                $validated['notes'] ?? null,
+/*
+|--------------------------------------------------------------------------
+| ORDERED GLASSES
+|--------------------------------------------------------------------------
+*/
 
-            'follow_up_date' =>
-                $validated['follow_up_date'] ?? null,
+if (!empty($validated['ordered_glasses'])) {
 
-            'updated_at' => now(),
-        ];
+    $existingOrder = DB::table('glasses_orders')
+        ->where('visit_id', $visitId)
+        ->first();
 
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | Restore previous inventory if frame was changed
+    |--------------------------------------------------------------------------
+    */
 
-        if (!empty($validated['id'])) {
+    if (
+        $existingOrder &&
+        $existingOrder->frame_id &&
+        $existingOrder->frame_id != ($validated['frame_id'] ?? null)
+    ) {
+        DB::table('glasses_inventory')
+            ->where('id', $existingOrder->frame_id)
+            ->increment('available_quantity');
+    }
 
-            DB::table('visits')
-                ->where('id', $validated['id'])
-                ->update($visitData);
+    /*
+    |--------------------------------------------------------------------------
+    | Reserve new frame
+    |--------------------------------------------------------------------------
+    */
+
+    $frameId = $validated['frame_id'] ?? null;
+
+    if ($frameId) {
+
+        $frame = DB::table('glasses_inventory')
+            ->where('id', $frameId)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$frame) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'frame_id' => 'Selected glasses frame was not found.',
+            ]);
         }
 
         /*
         |--------------------------------------------------------------------------
-        | CREATE
+        | Only decrease inventory when:
+        | - this is a new order, OR
+        | - the frame was changed
         |--------------------------------------------------------------------------
         */
 
-        else {
+        $shouldReserve =
+            !$existingOrder ||
+            $existingOrder->frame_id != $frameId;
 
-            $visitData['created_at'] = now();
+        if ($shouldReserve) {
 
-            DB::table('visits')
-                ->insert($visitData);
+            if ($frame->available_quantity <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'frame_id' => 'The selected glasses frame is out of stock.',
+                ]);
+            }
+
+            DB::table('glasses_inventory')
+                ->where('id', $frameId)
+                ->decrement('available_quantity');
         }
-    });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Price
+    |--------------------------------------------------------------------------
+    |
+    | The Vue sends unit_price.
+    | If no price was supplied, use inventory selling_price.
+    |--------------------------------------------------------------------------
+    */
+
+    $unitPrice = $validated['unit_price'] ?? 0;
+
+    if ($unitPrice === null && $frameId) {
+
+        $unitPrice = DB::table('glasses_inventory')
+            ->where('id', $frameId)
+            ->value('selling_price');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create / Update Glasses Order
+    |--------------------------------------------------------------------------
+    */
+
+    if ($existingOrder) {
+
+        DB::table('glasses_orders')
+            ->where('id', $existingOrder->id)
+            ->update([
+                'frame_id' => $frameId,
+                'description' => $validated['glasses_description'] ?? null,
+                'serial_no' => $validated['glasses_serial'] ?? null,
+                'additional_features' => $validated['glasses_features'] ?? null,
+                'unit_price' => $unitPrice ?? 0,
+                'updated_at' => now(),
+            ]);
+
+        $glassesOrderId = $existingOrder->id;
+
+    } else {
+
+        $glassesOrderId = DB::table('glasses_orders')
+            ->insertGetId([
+                'visit_id' => $visitId,
+                'frame_id' => $frameId,
+                'description' => $validated['glasses_description'] ?? null,
+                'serial_no' => $validated['glasses_serial'] ?? null,
+                'additional_features' => $validated['glasses_features'] ?? null,
+                'unit_price' => $unitPrice ?? 0,
+                'status' => 'Ordered',
+                'ordered_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Initial Tracking
+        |--------------------------------------------------------------------------
+        */
+
+        DB::table('glasses_order_tracking')
+            ->insert([
+                'glasses_order_id' => $glassesOrderId,
+                'status' => 'Ordered',
+                'remarks' => 'Glasses order created.',
+                'created_at' => now(),
+            ]);
+    }
+
+} else {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Ordered Glasses
+    |--------------------------------------------------------------------------
+    */
+
+    $existingOrder = DB::table('glasses_orders')
+        ->where('visit_id', $visitId)
+        ->first();
+
+    if ($existingOrder) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Return frame to available inventory
+        |--------------------------------------------------------------------------
+        */
+
+        if ($existingOrder->frame_id) {
+
+            DB::table('glasses_inventory')
+                ->where('id', $existingOrder->frame_id)
+                ->increment('available_quantity');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delete order
+        |--------------------------------------------------------------------------
+        */
+
+        DB::table('glasses_orders')
+            ->where('id', $existingOrder->id)
+            ->delete();
+    }
+}
+});
 
     return redirect()
         ->route('visits.index')

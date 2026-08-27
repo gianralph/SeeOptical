@@ -396,6 +396,193 @@
                   </v-col>
                 </v-row>
               </div>
+<!-- Ordered Glasses -->
+<v-card
+    variant="outlined"
+    class="mt-4 rounded-lg"
+>
+    <v-card-title
+        class="text-subtitle-2 font-weight-bold text-uppercase
+               text-medium-emphasis border-b
+               px-4 py-3 bg-grey-lighten-5"
+    >
+        <v-icon
+            icon="mdi-glasses"
+            class="mr-2"
+        />
+
+        Ordered Glasses
+    </v-card-title>
+
+    <v-card-text class="pa-4">
+
+        <v-switch
+            v-model="form.ordered_glasses"
+            label="Patient ordered glasses"
+            color="primary"
+            hide-details
+        />
+
+        <v-expand-transition>
+            <div v-if="form.ordered_glasses">
+
+                <!-- SELECT FRAME -->
+                <v-autocomplete
+                    v-model="form.frame_id"
+                    :items="availableGlassesInventory"
+                    item-title="display_name"
+                    item-value="id"
+                    label="Select Glasses Frame"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-glasses"
+                    clearable
+                    class="mt-4"
+                    :rules="[rules.required]"
+                    @update:model-value="onGlassesSelected"
+                >
+                    <template #item="{ props, item }">
+                        <v-list-item
+                            v-bind="props"
+                            :title="item.raw.display_name"
+                        >
+                            <template #subtitle>
+                                <div>
+                                    Available:
+                                    <strong>
+                                        {{ item.raw.available_quantity }}
+                                    </strong>
+                                </div>
+
+                                <div>
+                                    Selling Price:
+                                    <strong>
+                                        ₱{{
+                                            Number(
+                                                item.raw.selling_price
+                                            ).toLocaleString(
+                                                "en-PH",
+                                                {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                }
+                                            )
+                                        }}
+                                    </strong>
+                                </div>
+                            </template>
+                        </v-list-item>
+                    </template>
+
+                    <!-- SELECTED VALUE -->
+                    <template #selection="{ item }">
+                        <span>
+                            {{ item.raw.display_name }}
+                        </span>
+                    </template>
+                </v-autocomplete>
+
+                <!-- SELECTED FRAME INFORMATION -->
+                <v-alert
+                    v-if="selectedGlasses"
+                    type="info"
+                    variant="tonal"
+                    class="mt-3 mb-4"
+                    icon="mdi-information-outline"
+                >
+                    <div class="font-weight-bold">
+                        {{ selectedGlasses.brand || "" }}
+                        {{ selectedGlasses.model || "" }}
+                    </div>
+
+                    <div>
+                        {{ selectedGlasses.description }}
+                    </div>
+
+                    <div
+                        v-if="selectedGlasses.color"
+                        class="text-caption mt-1"
+                    >
+                        Color: {{ selectedGlasses.color }}
+                    </div>
+
+                    <div class="mt-2">
+                        Available:
+                        <strong>
+                            {{ selectedGlasses.available_quantity }}
+                        </strong>
+                    </div>
+
+                    <div>
+                        Inventory Selling Price:
+                        <strong>
+                            ₱{{
+                                Number(
+                                    selectedGlasses.selling_price
+                                ).toLocaleString(
+                                    "en-PH",
+                                    {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2
+                                    }
+                                )
+                            }}
+                        </strong>
+                    </div>
+                </v-alert>
+
+                <!-- ORDER DETAILS -->
+                <v-row>
+
+                    <!-- UNIT PRICE -->
+                    <v-col cols="12" md="6">
+                        <v-text-field
+                            v-model="form.unit_price"
+                            label="Selling Price"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            variant="outlined"
+                            density="comfortable"
+                            prepend-inner-icon="mdi-currency-php"
+                            prefix="₱"
+                            :rules="[rules.required]"
+                            hint="Automatically populated from inventory, but editable."
+                            persistent-hint
+                        />
+                    </v-col>
+
+                    <!-- SERIAL -->
+                    <v-col cols="12" md="6">
+                        <v-text-field
+                            v-model="form.glasses_serial"
+                            label="Serial Number"
+                            variant="outlined"
+                            density="comfortable"
+                            prepend-inner-icon="mdi-barcode"
+                        />
+                    </v-col>
+
+                    <!-- FEATURES -->
+                    <v-col cols="12">
+                        <v-text-field
+                            v-model="form.glasses_features"
+                            label="Additional Features"
+                            placeholder="Polarized, UV Protection, Anti-Reflective..."
+                            variant="outlined"
+                            density="comfortable"
+                            prepend-inner-icon="mdi-star-outline"
+                        />
+                    </v-col>
+
+                </v-row>
+
+            </div>
+        </v-expand-transition>
+
+    </v-card-text>
+</v-card>
+
 
             </v-form>
           </v-card-text>
@@ -546,7 +733,7 @@
 
 
 <script setup>
-import { ref, defineProps } from "vue";
+import { ref, computed, onMounted,watch } from "vue";
 import { useForm, router } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -579,6 +766,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    glassesInventory: {
+    type: Array,
+    default: () => [],
+},
     
 });
 
@@ -649,6 +840,12 @@ const form = useForm({
     notes: "",
 
     follow_up_date: null,
+        // Ordered Glasses
+    ordered_glasses: false,
+        frame_id: null,
+    glasses_serial: "",
+    glasses_features: "",
+        unit_price: null,
 });
 
 /*
@@ -673,6 +870,29 @@ const savingPatient = ref(false);
 const patientFormRef = ref(null);
 
 const patientList = ref([...props.patients]);
+const glassesInventory = ref([...props.glassesInventory]);
+// const selectedGlasses = ref(null);
+const selectedGlasses = computed(() => {
+    if (!form.frame_id) {
+        return null;
+    }
+
+    return glassesInventory.value.find(
+        (item) => Number(item.id) === Number(form.frame_id)
+    ) ?? null;
+});
+const availableGlassesInventory = computed(() => {
+    return glassesInventory.value.filter((item) => {
+
+        // Keep the currently selected frame visible while editing
+        if (item.id === form.frame_id) {
+            return true;
+        }
+
+        return Number(item.available_quantity) > 0;
+    });
+});
+
 /*
 |--------------------------------------------------------------------------
 | Dropdowns
@@ -697,7 +917,15 @@ const visitTypes = [
 const rules = {
     required: (value) => !!value || "Required.",
 };
+// const selectedGlasses = computed(() => {
+//     if (!form.frame_id) {
+//         return null;
+//     }
 
+//     return glassesInventory.value.find(
+//         item => item.id === form.frame_id
+//     ) ?? null;
+// });
 /*
 |--------------------------------------------------------------------------
 | Open Dialog
@@ -721,6 +949,7 @@ const openPatientDialog = () => {
 };
 const openDialog = (visit) => {
     resetHistory();
+
     if (visit) {
         editingVisit.value = visit;
 
@@ -730,9 +959,11 @@ const openDialog = (visit) => {
         form.chief_complaint_id = visit.chief_complaint_id;
 
         form.visit_date = visit.visit_date;
-form.visit_time = visit.visit_time
-    ? visit.visit_time.substring(0, 5)
-    : null;
+
+        form.visit_time = visit.visit_time
+            ? visit.visit_time.substring(0, 5)
+            : null;
+
         form.visit_type = visit.visit_type;
 
         form.visual_acuity_od = visit.visual_acuity_od ?? "";
@@ -751,6 +982,12 @@ form.visit_time = visit.visit_time
         form.notes = visit.notes ?? "";
 
         form.follow_up_date = visit.follow_up_date ?? null;
+
+        // Glasses
+        form.ordered_glasses = !!visit.glasses_order_id;
+        form.frame_id = visit.glasses_frame_id ?? null;
+        form.glasses_serial = visit.glasses_serial ?? "";
+        form.glasses_features = visit.glasses_features ?? "";
     } else {
         editingVisit.value = null;
 
@@ -758,6 +995,11 @@ form.visit_time = visit.visit_time
 
         form.id = null;
         form.chief_complaint_id = null;
+
+        form.ordered_glasses = false;
+        form.frame_id = null;
+        form.glasses_serial = "";
+        form.glasses_features = "";
 
         form.visit_date = new Date()
             .toISOString()
@@ -818,6 +1060,11 @@ const submitForm = async () => {
 
             form.visit_type = "Consultation";
             form.chief_complaint_id = null;
+
+            form.ordered_glasses = false;
+            form.glasses_description = "";
+            form.glasses_serial = "";
+            form.glasses_features = "";
         },
 
         onError: (errors) => {
@@ -1023,6 +1270,23 @@ const saveNewPatient = async () => {
         savingPatient.value = false;
     }
 };
+watch(
+    () => form.frame_id,
+    (newFrameId) => {
+        if (!newFrameId) {
+            form.unit_price = 0;
+            return;
+        }
+
+        const glasses = glassesInventory.value.find(
+            (item) => Number(item.id) === Number(newFrameId)
+        );
+
+        if (glasses) {
+            form.unit_price = glasses.selling_price ?? 0;
+        }
+    }
+);
 </script>
 
 <style scoped>

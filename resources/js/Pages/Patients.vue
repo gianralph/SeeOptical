@@ -47,8 +47,7 @@
 
 <v-data-table
     :headers="headers"
-    :items="patients"
-    :search="search"
+  :items="filteredPatients"
     density="comfortable"
     hover
     class="border rounded-lg"
@@ -578,7 +577,7 @@
   </DashboardLayout>
 </template>
 <script setup>
-import { ref, nextTick } from "vue";
+import { ref, nextTick,computed } from "vue";
 import axios from "axios";
 import moment from "moment";
 import Swal from "sweetalert2";
@@ -613,6 +612,52 @@ const patientFormRef = ref(null);
 const savingPatient = ref(false);
 const editingPatient = ref(null);
 
+const filteredPatients = computed(() => {
+  const query = String(search.value ?? "").trim().toLowerCase();
+
+  if (!query) {
+    return props.patients;
+  }
+
+  return props.patients.filter((patient) => {
+    const fullName = [
+      patient.last_name,
+      patient.first_name,
+      patient.middle_name,
+      patient.suffix,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const reverseName = [
+      patient.last_name,
+      patient.first_name,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const searchableValues = [
+      fullName,
+      reverseName,
+      patient.patient_no,
+      patient.first_name,
+      patient.middle_name,
+      patient.last_name,
+      patient.suffix,
+      patient.sex,
+      patient.address,
+      patient.contact_no,
+      patient.email,
+      patient.birth_date,
+    ];
+
+    return searchableValues.some((value) =>
+      String(value ?? "")
+        .toLowerCase()
+        .includes(query)
+    );
+  });
+});
 const patientForm = ref({
     first_name: "",
     middle_name: "",

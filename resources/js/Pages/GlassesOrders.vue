@@ -134,14 +134,13 @@
 
                 <!-- TABLE -->
                 <v-card-text class="pa-0">
-                    <v-data-table
-                        :headers="headers"
-                        :items="filteredOrders"
-                        :search="search"
-                        :loading="loading"
-                        hover
-                        class="clean-table"
-                    >
+<v-data-table
+    :headers="headers"
+    :items="filteredOrders"
+    :loading="loading"
+    hover
+    class="clean-table"
+>
 
                         <!-- PATIENT -->
                         <template #item.patient="{ item }">
@@ -1095,15 +1094,62 @@ const statusSummary = [
 const statusFilter = ref(null);
 
 const filteredOrders = computed(() => {
-    if (!statusFilter.value) {
-        return ordersList.value;
-    }
+    const query = String(search.value ?? "").trim().toLowerCase();
+    const selectedStatus = statusFilter.value;
 
-    return ordersList.value.filter(
-        (order) =>
-            (order.glasses_status || "Ordered") ===
-            statusFilter.value
-    );
+    return ordersList.value.filter((order) => {
+        // ---------------------------------------------------------
+        // STATUS
+        // ---------------------------------------------------------
+        const currentStatus =
+            order.glasses_status ||
+            order.status ||
+            "Ordered";
+
+        if (
+            selectedStatus &&
+            currentStatus !== selectedStatus
+        ) {
+            return false;
+        }
+
+        // ---------------------------------------------------------
+        // SEARCH
+        // ---------------------------------------------------------
+        if (!query) {
+            return true;
+        }
+
+        const searchableValues = [
+            // Patient
+            order.patient_name,
+            order.patient_id,
+            order.patient_no,
+
+            // Glasses
+            order.frame_brand,
+            order.frame_model,
+            order.frame_code,
+            order.frame_color,
+            order.frame_description,
+
+            // Order
+            order.serial_no,
+            order.additional_features,
+            currentStatus,
+
+            // Other possible fields
+            order.unit_price,
+            order.created_at,
+            order.updated_at,
+        ];
+
+        return searchableValues.some((value) =>
+            String(value ?? "")
+                .toLowerCase()
+                .includes(query)
+        );
+    });
 });
 
 const countStatus = (status) => {

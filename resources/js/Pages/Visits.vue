@@ -1,6 +1,126 @@
 <template>
   <DashboardLayout>
     <v-container fluid class="pa-6">
+<!-- TODAY'S FOLLOW-UPS -->
+<v-card
+    elevation="0"
+    rounded="xl"
+    class="followup-card mb-6"
+>
+    <!-- HEADER -->
+    <v-card-title class="followup-header">
+        <div class="d-flex align-center">
+            <v-avatar
+                color="blue-lighten-5"
+                size="42"
+                rounded="lg"
+                class="mr-3"
+            >
+                <v-icon
+                    icon="mdi-calendar-check-outline"
+                    color="primary"
+                    size="22"
+                />
+            </v-avatar>
+
+            <div>
+                <div class="followup-title">
+                    Today's Follow-ups
+                </div>
+
+                <div class="followup-subtitle">
+                    Patients scheduled for follow-up today
+                </div>
+            </div>
+        </div>
+
+        <v-chip
+            color="primary"
+            variant="tonal"
+            size="small"
+            rounded="pill"
+            class="font-weight-bold"
+        >
+            {{ todayFollowUps.length }}
+        </v-chip>
+    </v-card-title>
+
+    <v-divider />
+
+    <!-- LIST -->
+    <div v-if="todayFollowUps.length">
+        <div
+            v-for="(followUp, index) in todayFollowUps"
+            :key="`followup-${followUp.id}`"
+            class="followup-list-item"
+            @click="openNewVisitForPatient(followUp)"
+        >
+            <!-- AVATAR -->
+            <v-avatar
+                size="40"
+                color="blue-lighten-5"
+                class="mr-3"
+            >
+                <span class="followup-avatar-text">
+                    {{ getPatientInitials(followUp) }}
+                </span>
+            </v-avatar>
+
+            <!-- PATIENT -->
+            <div class="followup-patient">
+                <div class="followup-patient-name">
+                    {{ getPatientName(followUp) }}
+                </div>
+
+                <div class="followup-patient-info">
+                    <span>
+                        {{ followUp.diagnosis || "Follow-up consultation" }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- DATE -->
+            <div class="followup-date">
+                <div class="followup-date-label">
+                    FOLLOW-UP
+                </div>
+
+                <div class="followup-date-value">
+                    {{ formatDate(followUp.follow_up_date) }}
+                </div>
+            </div>
+
+            <!-- ACTION -->
+            <v-icon
+                icon="mdi-chevron-right"
+                size="20"
+                color="grey"
+                class="ml-3"
+            />
+        </div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div
+        v-else
+        class="followup-empty"
+    >
+        <v-icon
+            icon="mdi-calendar-blank-outline"
+            size="26"
+            color="grey"
+            class="mb-2"
+        />
+
+        <div class="followup-empty-title">
+            No follow-ups today
+        </div>
+
+        <div class="followup-empty-subtitle">
+            Patients scheduled for today will appear here.
+        </div>
+    </div>
+</v-card>
       <!-- ========================================================= -->
       <!-- MAIN CARD                                                  -->
       <!-- ========================================================= -->
@@ -175,6 +295,7 @@
         </v-card-text>
 
       </v-card>
+      
 
 
       <!-- ========================================================= -->
@@ -1876,7 +1997,109 @@ const props = defineProps({
         default: () => [],
     },
 });
+/*
+|--------------------------------------------------------------------------
+| Today's Date
+|--------------------------------------------------------------------------
+*/
+const todayDate = () => {
+    const date = new Date();
 
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Patient Name
+|--------------------------------------------------------------------------
+*/
+const getPatientName = (visit) => {
+    if (visit?.patient?.description) {
+        return visit.patient.description;
+    }
+
+    if (visit?.patient) {
+        return [
+            visit.patient.last_name,
+            visit.patient.first_name,
+            visit.patient.middle_name,
+            visit.patient.suffix,
+        ]
+            .filter(Boolean)
+            .join(", ");
+    }
+
+    if (visit?.patient_name) {
+        return visit.patient_name;
+    }
+
+    return "Unknown Patient";
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Patient Initials
+|--------------------------------------------------------------------------
+*/
+const getPatientInitials = (visit) => {
+    const name = getPatientName(visit);
+
+    if (!name || name === "Unknown Patient") {
+        return "?";
+    }
+
+    const parts = name
+        .replace(",", " ")
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (parts.length === 1) {
+        return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    return (
+        parts[0].charAt(0) +
+        parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Today's Follow-ups
+|--------------------------------------------------------------------------
+*/
+const todayFollowUps = computed(() => {
+    const today = todayDate();
+
+    const visits = Array.isArray(props.visits)
+        ? props.visits
+        : [];
+
+    return visits
+        .filter((visit) => {
+            if (!visit?.follow_up_date) {
+                return false;
+            }
+
+            return (
+                String(visit.follow_up_date).substring(0, 10) ===
+                today
+            );
+        })
+        .sort((a, b) => {
+            const nameA = getPatientName(a).toLowerCase();
+            const nameB = getPatientName(b).toLowerCase();
+
+            return nameA.localeCompare(nameB);
+        });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -2449,7 +2672,82 @@ const openDialog = (visit) => {
     dialogVisible.value = true;
 };
 
+const openNewVisitForPatient = async (followUp) => {
+    resetHistory();
 
+    replacingGlassesOrder.value = false;
+    originalGlassesFrameId.value = null;
+    editingVisit.value = null;
+
+    /*
+     * Reset the form
+     */
+    form.reset();
+
+    form.id = null;
+
+    /*
+     * Make sure the patient exists in the autocomplete.
+     */
+    const existingPatient = patientList.value.find(
+        (patient) =>
+            Number(patient.id) === Number(followUp.patient_id)
+    );
+
+    if (!existingPatient && followUp.patient) {
+        const patient = {
+            ...followUp.patient,
+            description:
+                followUp.patient.description ??
+                [
+                    followUp.patient.last_name,
+                    followUp.patient.first_name,
+                    followUp.patient.middle_name,
+                    followUp.patient.suffix,
+                ]
+                    .filter(Boolean)
+                    .join(", "),
+        };
+
+        patientList.value.push(patient);
+    }
+
+    /*
+     * Select patient
+     */
+    form.patient_id = followUp.patient_id;
+
+    /*
+     * New follow-up visit
+     */
+    form.visit_date = todayDate();
+    form.visit_time = "";
+    form.visit_type = "Follow-up";
+
+    form.doctor_id = null;
+    form.chief_complaint_id = null;
+
+    /*
+     * Reset glasses
+     */
+    form.ordered_glasses = false;
+    form.frame_id = null;
+    form.glasses_serial = "";
+    form.glasses_features = "";
+    form.unit_price = null;
+
+    /*
+     * Open New Visit dialog
+     */
+    dialogVisible.value = true;
+
+    /*
+     * Load previous clinical information
+     */
+    if (form.patient_id) {
+        await loadPatientHistory(form.patient_id);
+    }
+};
 /*
 |--------------------------------------------------------------------------
 | Replace Glasses Order
@@ -3291,6 +3589,208 @@ watch(
 
 
 <style scoped>
+.followup-card {
+    overflow: hidden;
+
+    border: 1px solid rgba(24, 37, 221, 0.363) !important;
+
+    background: #ffffff;
+
+    box-shadow:
+        0 4px 18px rgba(15, 23, 42, 0.045) !important;
+}
+
+/* HEADER */
+
+.followup-header {
+    min-height: 76px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 15px 20px !important;
+}
+
+.followup-title {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+
+    color: #3f3f3f;
+}
+
+.followup-subtitle {
+    margin-top: 3px;
+
+    font-size: 12px;
+    font-weight: 400;
+
+    color: #9a9a9a;
+}
+
+
+/* LIST ITEM */
+
+.followup-list-item {
+    display: flex;
+    align-items: center;
+
+    min-height: 66px;
+
+    padding: 10px 18px;
+
+    cursor: pointer;
+
+    border-bottom: 1px solid #f0f0f0;
+
+    transition:
+        background 0.15s ease,
+        padding-left 0.15s ease;
+}
+
+.followup-list-item:last-child {
+    border-bottom: none;
+}
+
+.followup-list-item:hover {
+    background: #f8fbff;
+    padding-left: 22px;
+}
+
+.followup-list-item:active {
+    background: #f1f6fd;
+}
+
+
+/* AVATAR */
+
+.followup-avatar-text {
+    font-size: 12px;
+    font-weight: 700;
+
+    color: #1976d2;
+}
+
+
+/* PATIENT */
+
+.followup-patient {
+    flex: 1;
+    min-width: 0;
+}
+
+.followup-patient-name {
+    font-size: 14px;
+    font-weight: 600;
+
+    color: #424242;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.followup-patient-info {
+    display: flex;
+    align-items: center;
+
+    margin-top: 3px;
+
+    font-size: 11px;
+
+    color: #9a9a9a;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.followup-separator {
+    margin: 0 7px;
+}
+
+
+/* DATE */
+
+.followup-date {
+    flex-shrink: 0;
+
+    min-width: 115px;
+
+    text-align: right;
+}
+
+.followup-date-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+
+    color: #b0b0b0;
+}
+
+.followup-date-value {
+    margin-top: 2px;
+
+    font-size: 11px;
+    font-weight: 600;
+
+    color: #1976d2;
+}
+
+
+/* EMPTY */
+
+.followup-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    padding: 35px 20px;
+
+    text-align: center;
+}
+
+.followup-empty-title {
+    font-size: 13px;
+    font-weight: 600;
+
+    color: #666;
+}
+
+.followup-empty-subtitle {
+    margin-top: 3px;
+
+    font-size: 11px;
+
+    color: #aaa;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+    .followup-header {
+        padding: 14px 15px !important;
+    }
+
+    .followup-list-item {
+        padding: 11px 14px;
+    }
+
+    .followup-list-item:hover {
+        padding-left: 17px;
+    }
+
+    .followup-date {
+        display: none;
+    }
+
+    .followup-patient-info {
+        max-width: 220px;
+    }
+}
 
 .gap-1 {
   gap: 4px;
